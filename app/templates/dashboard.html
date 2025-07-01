@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <h2 class="mb-4">How are you feeling today?</h2>
+        
+        <div class="card mb-4">
+            <div class="card-body text-center">
+                <h5 class="card-title">Update Your Mood</h5>
+                <div class="d-flex justify-content-center my-3">
+                    {% for i in range(1, 6) %}
+                        <button class="btn btn-outline-primary mx-1 mood-btn" data-mood="{{ i }}" style="font-size: 2rem;">
+                            {% if i == 1 %}😞{% endif %}
+                            {% if i == 2 %}😕{% endif %}
+                            {% if i == 3 %}😐{% endif %}
+                            {% if i == 4 %}🙂{% endif %}
+                            {% if i == 5 %}😊{% endif %}
+                        </button>
+                    {% endfor %}
+                </div>
+                <p class="text-muted">Click on an emoji that best represents your current mood</p>
+                
+                <!-- Mood Note Section -->
+                <div id="mood-note-section" class="mt-3" style="display: none;">
+                    <div class="form-floating">
+                        <textarea class="form-control" id="mood-note" 
+                                  placeholder="Add an optional note about your mood" 
+                                  style="height: 100px"></textarea>
+                        <label for="mood-note">Add an optional note about your mood</label>
+                    </div>
+                    <button class="btn btn-primary mt-2" onclick="submitMoodWithNote()">
+                        Submit Mood
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row">
+            <div class="col-md-8">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h5 class="card-title">Your Mood Over the Past Week</h5>
+                        <div>
+                            <canvas id="moodChart"></canvas>
+                        </div>
+                        <div class="mt-3">
+                            <p>Overall trend: 
+                                <span class="badge bg-{% if overall_trend == 'positive' %}success{% elif overall_trend == 'negative' %}danger{% else %}warning{% endif %}">
+                                    {{ overall_trend }}
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">Quick Access</h5>
+                                <div class="d-grid gap-2">
+                                    <a href="{{ url_for('main.meditation') }}" class="btn btn-outline-primary">Meditation Center</a>
+                                    <a href="{{ url_for('main.activity_center') }}" class="btn btn-outline-primary">Activities</a>
+                                    <a href="{{ url_for('main.chatbot') }}" class="btn btn-outline-primary">Support Chatbot</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-4">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">Today's Tip</h5>
+                                <p>Taking just 5 minutes for deep breathing can significantly reduce stress levels. Try inhaling for 4 seconds, holding for 4 seconds, and exhaling for 6 seconds.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- New Calendar Section -->
+            <div class="col-md-4">
+                <div class="card h-100">
+                    <div class="card-body">
+                        <h5 class="card-title d-flex justify-content-between align-items-center past-history-title">
+                            Past History
+                            <div>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="changeMonth(-1)">←</button>
+                                <span id="current-month" class="mx-2 current-month-text">{{ current_date.strftime('%B %Y') }}</span>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="changeMonth(1)">→</button>
+                            </div>
+                        </h5>
+                        <div id="mood-calendar" class="mt-3">
+                            <!-- Calendar will be populated by JavaScript -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize mood chart
+        const ctx = document.getElementById('moodChart').getContext('2d');
+        const moodChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: {{ mood_chart_data|map(attribute='date')|list|tojson }},
+                datasets: [{
+                    label: 'Mood Level (1-5)',
+                    data: {{ mood_chart_data|map(attribute='mood')|list|tojson }},
+                    fill: false,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1,
+                    pointBackgroundColor: function(context) {
+                        const value = context.dataset.data[context.dataIndex];
+                        if (value >= 4) return 'green';
+                        if (value >= 3) return 'yellow';
+                        return 'red';
+                    }
+                }]
+            },
+            options: {
+                scales: {
+                    y: {
+                        beginAtZero: false,
+                        min: 1,
+                        max: 5,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                }
+            }
+        });
+
+        // Initialize calendar
+        generateCalendar(new Date().getFullYear(), new Date().getMonth());
+    });
+
+    // Mood tracking with notes
+    let selectedMood = null;
+    
+    document.querySelectorAll('.mood-btn').forEach(button => {
+        button.addEventListener('click', function() {
+            selectedMood = this.getAttribute('data-mood');
+            document.getElementById('mood-note-section').style.display = 'block';
+        });
+    });
+    
+    function submitMoodWithNote() {
+        const note = document.getElementById('mood-note').value;
+        
+        fetch("{{ url_for('main.update_mood') }}", {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: `mood_level=${selectedMood}&note=${encodeURIComponent(note)}`
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert('Mood updated successfully!');
+                window.location.reload();
+            }
+        });
+    }
+
+    // Calendar functions
+    function generateCalendar(year, month) {
+    const calendarDiv = document.getElementById('mood-calendar');
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const today = new Date();
+    
+    // Get today's date for highlighting
+    const isCurrentMonth = (today.getFullYear() === year && today.getMonth() === month);
+    const todayDate = today.getDate();
+
+    fetch(`/get_monthly_moods?year=${year}&month=${month + 1}`)
+        .then(response => response.json())
+        .then(moodData => {
+            let calendarHTML = `
+                <table class="table table-bordered calendar-table">
+                    <thead>
+                        <tr>
+                            <th>S</th><th>M</th><th>T</th><th>W</th>
+                            <th>T</th><th>F</th><th>S</th>
+                        </tr>
+                    </thead>
+                    <tbody><tr>`;
+            
+            // Empty cells for days before the 1st of month
+            for (let i = 0; i < firstDay.getDay(); i++) {
+                calendarHTML += '<td></td>';
+            }
+            
+            // Days of the month
+            for (let day = 1; day <= lastDay.getDate(); day++) {
+                const currentDate = new Date(year, month, day);
+                const dateString = currentDate.toISOString().split('T')[0];
+                const moodEntry = moodData.find(entry => entry.date === dateString);
+                
+                // Highlight today's date
+                const isToday = isCurrentMonth && day === todayDate;
+                const todayClass = isToday ? 'today' : '';
+                
+                let cellClass = moodEntry ? `mood-${moodEntry.mood_level}` : '';
+                let tooltip = '';
+                
+                if (moodEntry) {
+                    const emoji = ['😞', '😕', '😐', '🙂', '😊'][moodEntry.mood_level - 1];
+                    tooltip = `data-bs-toggle="tooltip" title="${emoji} ${moodEntry.note || ''}"`;
+                }
+                
+                calendarHTML += `
+                    <td class="${cellClass} ${todayClass}" ${tooltip}>
+                        ${day}
+                    </td>`;
+                
+                // Start new row at end of week
+                if ((day + firstDay.getDay()) % 7 === 0 && day !== lastDay.getDate()) {
+                    calendarHTML += '</tr><tr>';
+                }
+            }
+            
+            calendarHTML += '</tr></tbody></table>';
+            calendarDiv.innerHTML = calendarHTML;
+            
+            // Update month display
+            document.getElementById('current-month').textContent = 
+                new Date(year, month).toLocaleString('default', { month: 'long', year: 'numeric' });
+            
+            // Initialize tooltips
+            $('[data-bs-toggle="tooltip"]').tooltip();
+        });
+}
+    
+    function changeMonth(offset) {
+        const currentMonth = document.getElementById('current-month').textContent;
+        const date = new Date(currentMonth);
+        date.setMonth(date.getMonth() + offset);
+        generateCalendar(date.getFullYear(), date.getMonth());
+    }
+    
+    function viewDayDetails(dateString) {
+        // You can implement this to show detailed view of a specific day
+        console.log("Viewing details for", dateString);
+    }
+</script>
+
+<style>
+    /* Mood calendar styles */
+    /* Calendar container */
+    .calendar-container {
+        width: 100%;
+        overflow: hidden;
+    }
+    
+    /* Calendar table styling */
+    .calendar-table {
+        width: 100%;
+        table-layout: fixed; /* Ensures equal column width */
+        margin: 0;
+    }
+    
+    .calendar-table th, 
+    .calendar-table td {
+        width: 14.28%; /* 100% / 7 days */
+        text-align: center;
+        padding: 8px 2px; /* Reduced padding */
+        font-size: 0.85rem; /* Slightly smaller font */
+        position: relative;
+    }
+    
+    /* Day number styling */
+    .day-number {
+        display: block;
+        margin-bottom: 2px;
+        font-weight: normal;
+    }
+    
+    /* Mood indicator (small circle) */
+    .mood-indicator {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        margin: 0 auto;
+    }
+    
+    /* Today's date highlight */
+    .today .day-number {
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+
+    /* Reduce the size of the "Past History" text */
+    .past-history-title {
+        font-size: 0.9rem; /* Adjust the size as needed */
+    }
+
+    /* Reduce the size of the month & year text */
+    .current-month-text {
+        font-size: 0.6rem; /* Adjust the size as needed */
+    }
+
+    
+    /* Mood level colors */
+    .mood-1 { background-color: #ff6b6b; } /* Sad */
+    .mood-2 { background-color: #ffb347; } /* Meh */
+    .mood-3 { background-color: #f9f9a5; } /* Neutral */
+    .mood-4 { background-color: #a5d8a5; } /* Happy */
+    .mood-5 { background-color: #66cc99; } /* Very Happy */
+</style>
+{% endblock %}
