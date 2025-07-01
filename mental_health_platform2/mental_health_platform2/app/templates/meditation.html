@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+
+{% block title %}Meditation Center{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <h2 class="mb-4">Meditation Center</h2>
+        <p class="lead">Select a meditation track to help with your current needs</p>
+        
+        <div class="row">
+            {% for key, audio in audio_files.items() %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ audio.title }}</h5>
+                            <p class="card-text">{{ audio.description }}</p>
+                            <audio id="audio-{{ key }}" src="{{ url_for('static', filename='audio/' + audio.file) }}"></audio>
+                            <div class="audio-controls mt-3">
+                                <button class="btn btn-sm btn-outline-primary play-btn" data-audio="audio-{{ key }}">
+                                    <i class="bi bi-play-fill"></i> Play
+                                </button>
+                                <button class="btn btn-sm btn-outline-secondary pause-btn" data-audio="audio-{{ key }}" disabled>
+                                    <i class="bi bi-pause-fill"></i> Pause
+                                </button>
+                                <div class="mt-2">
+                                    <input type="range" class="form-range volume-slider" min="0" max="1" step="0.1" value="0.7" data-audio="audio-{{ key }}">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Audio player controls
+        document.querySelectorAll('.play-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const audioId = this.getAttribute('data-audio');
+                const audio = document.getElementById(audioId);
+                const pauseBtn = document.querySelector(`.pause-btn[data-audio="${audioId}"]`);
+                
+                audio.play();
+                this.disabled = true;
+                pauseBtn.disabled = false;
+            });
+        });
+        
+        document.querySelectorAll('.pause-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const audioId = this.getAttribute('data-audio');
+                const audio = document.getElementById(audioId);
+                const playBtn = document.querySelector(`.play-btn[data-audio="${audioId}"]`);
+                
+                audio.pause();
+                this.disabled = true;
+                playBtn.disabled = false;
+            });
+        });
+        
+        document.querySelectorAll('.volume-slider').forEach(slider => {
+            slider.addEventListener('input', function() {
+                const audioId = this.getAttribute('data-audio');
+                const audio = document.getElementById(audioId);
+                audio.volume = this.value;
+            });
+        });
+    });
+</script>
+{% endblock %}

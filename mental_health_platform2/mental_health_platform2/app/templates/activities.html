@@ -1,0 +1,324 @@
+{% extends "base.html" %}
+
+{% block title %}Activities{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-8 mx-auto">
+    <h2 class="mb-4">Activity Center</h2>
+    <p class="lead">Practice these activities with built-in timers</p>
+    
+    <div class="activity-stats mb-4">
+      <div class="row">
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-value" id="total-time">0h 0m</div>
+            <div class="stat-label">Total Time This Week</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-value" id="avg-time">0m</div>
+            <div class="stat-label">Daily Average</div>
+          </div>
+        </div>
+        <div class="col-md-4">
+          <div class="stat-card">
+            <div class="stat-value" id="activity-count">0</div>
+            <div class="stat-label">Activities Completed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="accordion" id="activitiesAccordion">
+      {% for emotion, activity_list in activities.items() %}
+        <div class="accordion-item">
+          <h2 class="accordion-header" id="heading{{ loop.index }}">
+            <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}">
+              {{ emotion|capitalize }} Activities
+            </button>
+          </h2>
+          <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#activitiesAccordion">
+            <div class="accordion-body">
+              {% for activity in activity_list %}
+                <div class="activity-item" id="activity-{{ loop.index }}">
+                  <h5>{{ activity }}</h5>
+                  <div class="activity-timer">
+                    <div class="timer-display" id="timer-{{ loop.index }}">05:00</div>
+                    <button class="timer-btn start-btn" data-timer="timer-{{ loop.index }}" data-activity="activity-{{ loop.index }}">
+                      <i class="bi bi-play-fill"></i> Start
+                    </button>
+                    <button class="timer-btn pause-btn" data-timer="timer-{{ loop.index }}" style="display: none;">
+                      <i class="bi bi-pause-fill"></i> Pause
+                    </button>
+                    <button class="timer-btn reset-btn" data-timer="timer-{{ loop.index }}">
+                      <i class="bi bi-arrow-counterclockwise"></i> Reset
+                    </button>
+                  </div>
+                  <div class="completion-message" id="completion-{{ loop.index }}">
+                    Great job! Activity completed.
+                  </div>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5>Your Activity Time Utilization</h5>
+      </div>
+      <div class="card-body">
+        <canvas id="activityChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  // Timer functionality
+  const timers = {};
+  let activityChart;
+  
+  // Initialize activity chart
+  function initActivityChart() {
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    activityChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+        datasets: [{
+          label: 'Minutes Spent',
+          data: [0, 0, 0, 0, 0, 0, 0],
+          backgroundColor: 'rgba(93, 120, 255, 0.7)',
+          borderColor: 'rgba(93, 120, 255, 1)',
+          borderWidth: 1
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            title: {
+              display: true,
+              text: 'Minutes'
+            }
+          },
+          x: {
+            title: {
+              display: true,
+              text: 'Day'
+            }
+          }
+        }
+      }
+    });
+    updateActivityStats();
+  }
+  
+  // Update activity statistics
+  function updateActivityStats() {
+    // In a real app, you would fetch this from your backend
+    // For demo purposes, we'll use mock data
+    const mockData = {
+      dates: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+      durations: [15, 30, 10, 25, 5, 20, 0] // Mock minutes per day
+    };
+    
+    const totalMinutes = mockData.durations.reduce((a, b) => a + b, 0);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = totalMinutes % 60;
+    const avgMinutes = Math.round(totalMinutes / 7);
+    const activityCount = mockData.durations.filter(d => d > 0).length;
+    
+    // Update stats display
+    document.getElementById('total-time').textContent = 
+      `${totalHours > 0 ? totalHours + 'h ' : ''}${remainingMinutes}m`;
+    document.getElementById('avg-time').textContent = `${avgMinutes}m`;
+    document.getElementById('activity-count').textContent = activityCount;
+    
+    // Update chart
+    activityChart.data.datasets[0].data = mockData.durations;
+    activityChart.update();
+  }
+  
+  // Timer controls
+  document.querySelectorAll('.start-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const timerId = this.getAttribute('data-timer');
+      const activityId = this.getAttribute('data-activity');
+      const activityName = document.getElementById(activityId).querySelector('h5').textContent;
+      
+      if (!timers[timerId]) {
+        let seconds = 300;
+        const timerDisplay = document.getElementById(timerId);
+        const completionMsg = document.getElementById(`completion-${timerId.split('-')[1]}`);
+        
+        this.style.display = 'none';
+        this.nextElementSibling.style.display = 'flex';
+        
+        timers[timerId] = setInterval(() => {
+          seconds--;
+          const mins = Math.floor(seconds / 60);
+          const secs = seconds % 60;
+          timerDisplay.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+          
+          if (seconds <= 0) {
+            clearInterval(timers[timerId]);
+            delete timers[timerId];
+            timerDisplay.textContent = "00:00";
+            completionMsg.style.display = 'block';
+            
+            // Simulate logging the activity
+            setTimeout(updateActivityStats, 1000);
+          }
+        }, 1000);
+      }
+    });
+  });
+  
+  document.querySelectorAll('.pause-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const timerId = this.getAttribute('data-timer');
+      const startBtn = this.previousElementSibling;
+      
+      if (timers[timerId]) {
+        clearInterval(timers[timerId]);
+        delete timers[timerId];
+        this.style.display = 'none';
+        startBtn.style.display = 'flex';
+      }
+    });
+  });
+  
+  document.querySelectorAll('.reset-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+      const timerId = this.getAttribute('data-timer');
+      const timerNum = timerId.split('-')[1];
+      const timerDisplay = document.getElementById(timerId);
+      const startBtn = document.querySelector(`.start-btn[data-timer="${timerId}"]`);
+      const pauseBtn = document.querySelector(`.pause-btn[data-timer="${timerId}"]`);
+      const completionMsg = document.getElementById(`completion-${timerNum}`);
+      
+      if (timers[timerId]) {
+        clearInterval(timers[timerId]);
+        delete timers[timerId];
+      }
+      
+      timerDisplay.textContent = "05:00";
+      startBtn.style.display = 'flex';
+      pauseBtn.style.display = 'none';
+      completionMsg.style.display = 'none';
+    });
+  });
+  
+  // Initialize the chart
+  initActivityChart();
+});
+</script>
+
+<style>
+.activity-item {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  border-left: 4px solid #5d78ff;
+}
+
+.activity-item:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+}
+
+.activity-timer {
+  display: flex;
+  align-items: center;
+  margin-top: 1rem;
+  gap: 10px;
+}
+
+.timer-display {
+  font-family: 'Courier New', monospace;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #2d3436;
+  background: #f8f9fa;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  min-width: 120px;
+  text-align: center;
+}
+
+.timer-btn {
+  border: none;
+  border-radius: 50px;
+  padding: 0.5rem 1.2rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.start-btn {
+  background: #00b894;
+  color: white;
+}
+
+.pause-btn {
+  background: #fdcb6e;
+  color: #2d3436;
+}
+
+.reset-btn {
+  background: #f8f9fa;
+  color: #2d3436;
+  border: 1px solid #e0e3e7;
+}
+
+.completion-message {
+  color: #00b894;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  display: none;
+}
+
+.stat-card {
+  background: white;
+  border-radius: 12px;
+  padding: 1.5rem;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.stat-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #5d78ff;
+  margin-bottom: 0.5rem;
+}
+
+.stat-label {
+  color: #2d3436;
+  opacity: 0.8;
+  font-size: 0.9rem;
+}
+
+#activityChart {
+  width: 100%;
+  max-height: 300px;
+}
+</style>
+{% endblock %}
