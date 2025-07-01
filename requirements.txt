@@ -7,3 +7,4 @@ werkzeug==2.0.1
 huggingface_hub
 flask-migrate==3.1.0
 SQLAlchemy==1.4.49
+transformers==4.xx.x
